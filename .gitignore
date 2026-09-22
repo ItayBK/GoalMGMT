@@ -1,0 +1,12 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Environment Files
+.env
+.env.*
+*.env
+!.env.example
+!.env.*.example
