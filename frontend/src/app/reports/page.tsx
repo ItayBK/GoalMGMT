@@ -14,7 +14,7 @@ export default function ReportsPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await api.get<AIReport[]>("/reports?limit=50");
+        const res = await api.get<AIReport[]>("/reports/?limit=50");
         setReports(res.data);
       } catch {
         toast.error("Failed to load reports");

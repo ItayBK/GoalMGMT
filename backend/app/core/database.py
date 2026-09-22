@@ -6,21 +6,23 @@ The connection string is read from settings.DATABASE_URL, which should be
 the Supabase pooler URI (port 6543 for transaction mode).
 """
 
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
 
 from app.core.config import settings
 
-# Create the async engine.
-# - pool_pre_ping: ensures stale connections to the remote Supabase DB are recycled.
-# - echo: set to False in production; True is useful for debugging SQL queries.
+# Create the async engine configured for Supabase Transaction Pooler (PgBouncer).
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
+    poolclass=NullPool,
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
+    },
 )
 
 # Session factory — produces async sessions bound to our engine.
@@ -49,5 +51,9 @@ async def init_db() -> None:
     Called once on application startup.
     In production, consider using Alembic migrations instead.
     """
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(SQLModel.metadata.create_all)
+    except Exception as exc:
+        print(f"[init_db] Note: Tables may already exist ({exc})")
+

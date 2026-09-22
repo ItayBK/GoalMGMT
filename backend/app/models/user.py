@@ -30,6 +30,6 @@ class User(SQLModel, table=True):
     hashed_password: str = Field(nullable=False)
     timezone: str = Field(default="UTC", max_length=50)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         nullable=False,
     )

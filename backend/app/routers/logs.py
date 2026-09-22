@@ -123,7 +123,9 @@ async def toggle_mission(
 
     log = await _get_or_create_log(mission, user.id, session)
     log.is_completed = not log.is_completed
-    log.completed_at = datetime.now(timezone.utc) if log.is_completed else None
+    log.completed_at = (
+        datetime.now(timezone.utc).replace(tzinfo=None) if log.is_completed else None
+    )
 
     session.add(log)
     await session.commit()
@@ -156,7 +158,7 @@ async def increment_mission(
     log.current_count = max(0, log.current_count + body.increment)
     log.is_completed = log.current_count >= mission.target_count
     log.completed_at = (
-        datetime.now(timezone.utc) if log.is_completed else None
+        datetime.now(timezone.utc).replace(tzinfo=None) if log.is_completed else None
     )
 
     session.add(log)

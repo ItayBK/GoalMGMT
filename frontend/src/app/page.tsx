@@ -50,13 +50,13 @@ export default function DashboardPage() {
         const wb = getPeriodBounds("weekly");
         const mb = getPeriodBounds("monthly");
         const [dm, dl, wm, wl, mm, ml, rep] = await Promise.all([
-          api.get<Mission[]>("/missions?frequency=daily"),
-          api.get<MissionLog[]>(`/logs?start=${db.start}&end=${db.end}`),
-          api.get<Mission[]>("/missions?frequency=weekly"),
-          api.get<MissionLog[]>(`/logs?start=${wb.start}&end=${wb.end}`),
-          api.get<Mission[]>("/missions?frequency=monthly"),
-          api.get<MissionLog[]>(`/logs?start=${mb.start}&end=${mb.end}`),
-          api.get<AIReport[]>("/reports?limit=1"),
+          api.get<Mission[]>("/missions/?frequency=daily"),
+          api.get<MissionLog[]>(`/logs/?start=${db.start}&end=${db.end}`),
+          api.get<Mission[]>("/missions/?frequency=weekly"),
+          api.get<MissionLog[]>(`/logs/?start=${wb.start}&end=${wb.end}`),
+          api.get<Mission[]>("/missions/?frequency=monthly"),
+          api.get<MissionLog[]>(`/logs/?start=${mb.start}&end=${mb.end}`),
+          api.get<AIReport[]>("/reports/?limit=1"),
         ]);
         setDailyMissions(dm.data);
         setDailyLogs(dl.data);

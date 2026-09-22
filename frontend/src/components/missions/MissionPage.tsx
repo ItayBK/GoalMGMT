@@ -56,8 +56,8 @@ export default function MissionPage({
     try {
       const { start, end } = getPeriodBounds(frequency);
       const [missionsRes, logsRes] = await Promise.all([
-        api.get<Mission[]>(`/missions?frequency=${frequency}`),
-        api.get<MissionLog[]>(`/logs?start=${start}&end=${end}`),
+        api.get<Mission[]>(`/missions/?frequency=${frequency}`),
+        api.get<MissionLog[]>(`/logs/?start=${start}&end=${end}`),
       ]);
       setMissions(missionsRes.data);
       setLogs(logsRes.data);
@@ -116,7 +116,7 @@ export default function MissionPage({
     target_count: number;
   }) {
     try {
-      const res = await api.post<Mission>("/missions", data);
+      const res = await api.post<Mission>("/missions/", data);
       setMissions((prev) => [res.data, ...prev]);
       toast.success("Mission created!");
     } catch {

@@ -10,3 +10,8 @@ ENV/
 *.env
 !.env.example
 !.env.*.example
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class

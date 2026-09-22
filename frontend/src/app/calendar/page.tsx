@@ -29,9 +29,9 @@ export default function CalendarPage() {
   const fetchData = useCallback(async () => {
     try {
       const [m, l] = await Promise.all([
-        api.get<Mission[]>("/missions"),
+        api.get<Mission[]>("/missions/"),
         api.get<MissionLog[]>(
-          `/logs?start=${startOfMonth}&end=${endOfMonth}`
+          `/logs/?start=${startOfMonth}&end=${endOfMonth}`
         ),
       ]);
       setMissions(m.data);

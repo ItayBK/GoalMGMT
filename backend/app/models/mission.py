@@ -50,6 +50,6 @@ class Mission(SQLModel, table=True):
 
     is_active: bool = Field(default=True, nullable=False)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         nullable=False,
     )
