@@ -29,14 +29,23 @@ def _get_period_bounds(freq: Frequency, ref: date | None = None) -> tuple[date, 
     """
     Return (period_start, period_end) for the given frequency relative to `ref`.
     """
-    today = ref or date.today()
+    if ref:
+        today = ref
+    else:
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        ist = ZoneInfo("Asia/Jerusalem")
+        today = datetime.now(ist).date()
 
     if freq == Frequency.DAILY:
         return today, today
 
     if freq == Frequency.WEEKLY:
-        start = today - timedelta(days=today.weekday())  # Monday
-        end = start + timedelta(days=6)  # Sunday
+        # weekday(): Monday=0 ... Sunday=6
+        # Shift to Sunday=0, Monday=1 ... Saturday=6
+        days_since_sunday = (today.weekday() + 1) % 7
+        start = today - timedelta(days=days_since_sunday)
+        end = start + timedelta(days=6)  # Saturday
         return start, end
 
     # MONTHLY
@@ -53,9 +62,10 @@ async def _get_or_create_log(
     mission: Mission,
     user_id: uuid.UUID,
     session: AsyncSession,
+    ref: date | None = None,
 ) -> MissionLog:
     """Return the existing log for this period, or create a fresh one."""
-    p_start, p_end = _get_period_bounds(mission.frequency)
+    p_start, p_end = _get_period_bounds(mission.frequency, ref=ref)
 
     result = await session.execute(
         select(MissionLog).where(
@@ -104,10 +114,11 @@ async def list_logs(
 @router.post("/{mission_id}/toggle", response_model=MissionLogResponse)
 async def toggle_mission(
     mission_id: uuid.UUID,
+    target_date: date | None = Query(default=None),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Toggle a BOOLEAN mission's completion for the current period."""
+    """Toggle a BOOLEAN mission's completion for the given period (defaults to today)."""
     result = await session.execute(
         select(Mission).where(Mission.id == mission_id, Mission.user_id == user.id)
     )
@@ -121,7 +132,7 @@ async def toggle_mission(
             detail="Use the /increment endpoint for COUNTER missions",
         )
 
-    log = await _get_or_create_log(mission, user.id, session)
+    log = await _get_or_create_log(mission, user.id, session, ref=target_date)
     log.is_completed = not log.is_completed
     log.completed_at = (
         datetime.now(timezone.utc).replace(tzinfo=None) if log.is_completed else None
@@ -136,10 +147,11 @@ async def toggle_mission(
 async def increment_mission(
     mission_id: uuid.UUID,
     body: LogIncrementRequest,
+    target_date: date | None = Query(default=None),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Increment a COUNTER mission's current_count for the current period."""
+    """Increment a COUNTER mission's current_count for the given period (defaults to today)."""
     result = await session.execute(
         select(Mission).where(Mission.id == mission_id, Mission.user_id == user.id)
     )
@@ -153,7 +165,7 @@ async def increment_mission(
             detail="Use the /toggle endpoint for BOOLEAN missions",
         )
 
-    log = await _get_or_create_log(mission, user.id, session)
+    log = await _get_or_create_log(mission, user.id, session, ref=target_date)
     log.current_count = max(0, log.current_count + body.increment)
     log.is_completed = log.current_count >= mission.target_count
     log.completed_at = (

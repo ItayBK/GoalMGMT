@@ -138,8 +138,39 @@ src/
 │   ├── missions/                    # MissionCard, MissionList, AddMissionModal
 │   └── reports/                     # ReportCard, MarkdownRenderer
 ├── lib/
-│   ├── api.ts                       # Axios/Fetch wrappers for FastAPI endpoints
-│   ├── auth.ts                      # NextAuth configuration
-│   └── utils.ts                     # Helper functions (date formatting, etc.)
-└── types/                           # TypeScript interfaces corresponding to SQLModel schemas
+│   ├── api.ts                       # Axios wrapper for FastAPI endpoints
+│   ├── auth.tsx                     # Auth provider with sessionStorage caching
+│   ├── cache.ts                    # In-memory client-side cache for instant route navigation
+│   └── utils.ts                     # Helper functions
+└── types/                           # TypeScript interfaces corresponding to SQLModel schemas
 ```
+
+---
+
+## Recent Implementation & Performance Updates
+
+### 1. Database & Infrastructure Optimization
+* **Region Migration**: Transferred Supabase PostgreSQL instance from Mumbai (`ap-south-1`) to Frankfurt (`eu-central-1`), reducing baseline round-trip network latency from **~260–300ms** to **~110–140ms**.
+* **Supabase PgBouncer Configuration**: Configured asyncpg engine with `NullPool`, `statement_cache_size: 0`, and dynamic `prepared_statement_name_func` using UUIDs. This prevents `DuplicatePreparedStatementError` when routing transactions through Supabase's transaction pooler (port 6543).
+* **Removed Redundant Round-Trips**: Eliminated unnecessary `await session.refresh()` calls in mutation endpoints (`missions.py`, `logs.py`), since IDs and timestamps are generated in Python before insertion.
+
+### 2. Frontend Performance & Instant Navigation
+* **Self-Hosted Font Optimization**: Replaced render-blocking external Google Fonts `<link>` tag with Next.js built-in `next/font/google` (`Inter`), eliminating external stylesheet round-trips.
+* **Session Restoration Caching**: Seeded user state from `sessionStorage` in `AuthProvider` so client route transitions render immediately without displaying a full-page auth loading spinner.
+* **Stale-While-Revalidate In-Memory Cache**: Built a lightweight module-level cache (`frontend/src/lib/cache.ts`) that persists across client-side route transitions. Page revisits load instantly from cache while revalidating in the background.
+
+### 3. Scope-Locked Mission Creation
+* **Section-Locked Modals**: In `/daily`, `/weekly`, and `/monthly`, the Frequency selector is hidden, the modal title dynamically reads *"Add Daily/Weekly/Monthly Mission"*, and `frequency` is strictly locked to that section.
+* **Dashboard Global Modal**: Added an **"Add Mission"** button directly to the Dashboard header (`/`), which provides the full frequency selector (`Daily`, `Weekly`, `Monthly`).
+* **Client-Side Enforcement**: API payload in `MissionPage` explicitly sets the section's frequency to prevent accidental cross-period submissions.
+
+### 4. Recurring Mission Lifecycle & Date History Navigation
+* **Clear Action Separation**: Redesigned `MissionCard` to separate completion from deletion:
+  - **Mark Done**: Prominent checkmark toggle. Toggling marks the mission completed for that period, turns the card emerald green, and displays a *"Done"* badge.
+  - **Delete Mission**: Distinct trash icon (`<Trash2 />`) with tooltip *"Delete mission permanently"* replacing the ambiguous "Remove" link.
+* **Period Date Navigation**: Added `< Prev` / `Next >` date navigation with a *"Jump to Today"* reset button on all section pages:
+  - Users can view and check off tasks for **Today**.
+  - Moving to **Tomorrow** demonstrates the automatic recurring reset (clean 0% state).
+  - Moving to **Yesterday** shows past completion logs.
+* **Date-Aware Logging Endpoints**: Updated backend `POST /api/logs/{id}/toggle` and `POST /api/logs/{id}/increment` to accept optional `target_date` query parameters, preserving exact daily/weekly/monthly history.
+* **Interactive Dashboard Focus**: "Today's Focus" list on the Dashboard features interactive checkmark buttons that toggle daily missions directly from the home screen and immediately update overall progress.

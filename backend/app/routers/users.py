@@ -34,3 +34,14 @@ async def update_profile(
     await session.commit()
     await session.refresh(user)
     return user
+
+
+@router.delete("/me", status_code=204)
+async def delete_profile(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Delete user account and all associated data."""
+    await session.delete(user)
+    await session.commit()
+

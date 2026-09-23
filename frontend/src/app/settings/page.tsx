@@ -4,41 +4,26 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
-import { Settings, Save } from "lucide-react";
+import { Settings } from "lucide-react";
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const [timezone, setTimezone] = useState(user?.timezone || "UTC");
-  const [saving, setSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  async function handleSave() {
-    setSaving(true);
+  async function handleDeleteAccount() {
+    if (!window.confirm("Are you sure you want to delete your account? This action cannot be undone.")) return;
+    
+    setIsDeleting(true);
     try {
-      await api.put("/users/me", { timezone });
-      toast.success("Settings saved!");
+      await api.delete("/users/me");
+      toast.success("Account deleted");
+      localStorage.removeItem("token");
+      window.location.href = "/login";
     } catch {
-      toast.error("Failed to save settings");
-    } finally {
-      setSaving(false);
+      toast.error("Failed to delete account");
+      setIsDeleting(false);
     }
   }
-
-  const timezones = [
-    "UTC",
-    "America/New_York",
-    "America/Chicago",
-    "America/Denver",
-    "America/Los_Angeles",
-    "Europe/London",
-    "Europe/Paris",
-    "Europe/Berlin",
-    "Asia/Tokyo",
-    "Asia/Shanghai",
-    "Asia/Kolkata",
-    "Asia/Jerusalem",
-    "Australia/Sydney",
-    "Pacific/Auckland",
-  ];
 
   return (
     <div className="animate-fade-in">
@@ -74,38 +59,22 @@ export default function SettingsPage() {
               className="input-field opacity-60 cursor-not-allowed"
             />
           </div>
-
-          {/* Timezone */}
-          <div>
-            <label className="block text-xs font-medium text-[rgb(var(--color-text-muted))] mb-1.5 uppercase tracking-wider">
-              Timezone
-            </label>
-            <select
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className="input-field appearance-none cursor-pointer"
-            >
-              {timezones.map((tz) => (
-                <option key={tz} value={tz} className="bg-[rgb(var(--color-surface))]">
-                  {tz}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            onClick={handleSave}
-            className="btn-primary flex items-center gap-2"
-            disabled={saving}
-          >
-            {saving ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            Save Changes
-          </button>
         </div>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="glass-card p-6 mb-6 border border-red-500/20 bg-red-500/5">
+        <h2 className="text-lg font-bold text-red-500 mb-2">Danger Zone</h2>
+        <p className="text-sm text-[rgb(var(--color-text-muted))] mb-4">
+          Permanently delete your account and all associated data. This action cannot be undone.
+        </p>
+        <button
+          onClick={handleDeleteAccount}
+          disabled={isDeleting}
+          className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isDeleting ? "Deleting..." : "Delete Account"}
+        </button>
       </div>
 
       {/* Info card */}

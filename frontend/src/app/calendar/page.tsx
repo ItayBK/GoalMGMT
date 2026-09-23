@@ -3,15 +3,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, CheckCircle2, Circle } from "lucide-react";
 import api from "@/lib/api";
+import { pageCache } from "@/lib/cache";
 import type { Mission, MissionLog } from "@/types";
 import toast from "react-hot-toast";
 
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [missions, setMissions] = useState<Mission[]>([]);
-  const [logs, setLogs] = useState<MissionLog[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -22,46 +20,83 @@ export default function CalendarPage() {
     year: "numeric",
   });
 
-  const yyyy = (d: Date) => d.toISOString().split("T")[0];
+  const yyyy = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  };
   const startOfMonth = yyyy(new Date(year, month, 1));
   const endOfMonth = yyyy(new Date(year, month + 1, 0));
+  const cacheKey = `calendar-page-data-${startOfMonth}`;
+  const cached = pageCache.get<any>(cacheKey);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [m, l] = await Promise.all([
-        api.get<Mission[]>("/missions/"),
-        api.get<MissionLog[]>(
-          `/logs/?start=${startOfMonth}&end=${endOfMonth}`
-        ),
-      ]);
-      setMissions(m.data);
-      setLogs(l.data);
-    } catch {
-      toast.error("Failed to load calendar data");
-    } finally {
-      setLoading(false);
-    }
-  }, [startOfMonth, endOfMonth]);
+  const [missions, setMissions] = useState<Mission[]>(cached?.missions ?? []);
+  const [logs, setLogs] = useState<MissionLog[]>(cached?.logs ?? []);
+  const [loading, setLoading] = useState(!cached);
+
+  const [prevCacheKey, setPrevCacheKey] = useState(cacheKey);
+  if (cacheKey !== prevCacheKey) {
+    setPrevCacheKey(cacheKey);
+    setMissions(cached?.missions ?? []);
+    setLogs(cached?.logs ?? []);
+    setLoading(!cached);
+  }
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    let ignore = false;
+    async function load() {
+      try {
+        const [m, l] = await Promise.all([
+          api.get<Mission[]>("/missions/"),
+          api.get<MissionLog[]>(
+            `/logs/?start=${startOfMonth}&end=${endOfMonth}`
+          ),
+        ]);
+        if (ignore) return;
+        setMissions(m.data);
+        setLogs(l.data);
+        pageCache.set(cacheKey, { missions: m.data, logs: l.data });
+      } catch {
+        if (!ignore) toast.error("Failed to load calendar data");
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [startOfMonth, endOfMonth, cacheKey]);
 
   function prevMonth() {
     setCurrentDate(new Date(year, month - 1, 1));
     setSelectedDate(null);
-    setLoading(true);
   }
 
   function nextMonth() {
     setCurrentDate(new Date(year, month + 1, 1));
     setSelectedDate(null);
-    setLoading(true);
+  }
+
+  async function prefetchMonth(delta: number) {
+    const d = new Date(year, month + delta, 1);
+    const start = yyyy(d);
+    const end = yyyy(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+    const k = `calendar-page-data-${start}`;
+    if (pageCache.get(k)) return;
+    try {
+      const [m, l] = await Promise.all([
+        api.get<Mission[]>("/missions/"),
+        api.get<MissionLog[]>(`/logs/?start=${start}&end=${end}`),
+      ]);
+      pageCache.set(k, { missions: m.data, logs: l.data });
+    } catch {}
   }
 
   // Build day grid
   const days: (number | null)[] = [];
-  const offset = firstDay === 0 ? 6 : firstDay - 1; // Monday-start
+  const offset = firstDay; // Sunday-start
   for (let i = 0; i < offset; i++) days.push(null);
   for (let d = 1; d <= daysInMonth; d++) days.push(d);
 
@@ -107,18 +142,18 @@ export default function CalendarPage() {
         <div className="lg:col-span-2 glass-card p-6">
           {/* Month nav */}
           <div className="flex items-center justify-between mb-6">
-            <button onClick={prevMonth} className="btn-ghost p-2">
+            <button onClick={prevMonth} onMouseEnter={() => prefetchMonth(-1)} className="btn-ghost p-2">
               <ChevronLeft className="w-5 h-5" />
             </button>
             <h2 className="text-lg font-bold">{monthName}</h2>
-            <button onClick={nextMonth} className="btn-ghost p-2">
+            <button onClick={nextMonth} onMouseEnter={() => prefetchMonth(1)} className="btn-ghost p-2">
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
 
           {/* Day headers */}
           <div className="grid grid-cols-7 gap-1 mb-2">
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
               <div
                 key={d}
                 className="text-center text-xs font-medium text-[rgb(var(--color-text-dim))] py-2"
@@ -193,38 +228,54 @@ export default function CalendarPage() {
                   }
                 )}
               </h3>
-              <div className="space-y-3">
-                {missions
-                  .filter((m) => m.frequency === "daily")
-                  .map((m) => {
-                    const log = logMap[m.id];
-                    const completed = log?.is_completed ?? false;
-                    return (
-                      <div
-                        key={m.id}
-                        className="flex items-center gap-3 text-sm"
-                      >
-                        {completed ? (
-                          <CheckCircle2 className="w-4 h-4 text-[rgb(var(--color-accent))] flex-shrink-0" />
-                        ) : (
-                          <Circle className="w-4 h-4 text-[rgb(var(--color-text-dim))] flex-shrink-0" />
-                        )}
-                        <span
-                          className={
-                            completed
-                              ? "line-through text-[rgb(var(--color-text-dim))]"
-                              : "text-[rgb(var(--color-text))]"
-                          }
-                        >
-                          {m.title}
-                        </span>
+              <div className="space-y-6">
+                {(["daily", "weekly", "monthly"] as const).map((freq) => {
+                  const freqMissions = missions.filter((m) => m.frequency === freq);
+                  if (freqMissions.length === 0) return null;
+
+                  return (
+                    <div key={freq}>
+                      <h4 className="text-xs font-bold text-[rgb(var(--color-text-dim))] uppercase tracking-wider mb-3">
+                        {freq} Missions
+                      </h4>
+                      <div className="space-y-3">
+                        {freqMissions.map((m) => {
+                          const log = logMap[m.id];
+                          const completed = log?.is_completed ?? false;
+                          return (
+                            <div
+                              key={m.id}
+                              className="flex items-center gap-3 text-sm"
+                            >
+                              {completed ? (
+                                <CheckCircle2 className="w-4 h-4 text-[rgb(var(--color-accent))] flex-shrink-0" />
+                              ) : (
+                                <Circle className="w-4 h-4 text-[rgb(var(--color-text-dim))] flex-shrink-0" />
+                              )}
+                              <span
+                                className={
+                                  completed
+                                    ? "line-through text-[rgb(var(--color-text-dim))]"
+                                    : "text-[rgb(var(--color-text))]"
+                                }
+                              >
+                                {m.title}
+                                {m.mission_type === "counter" && (
+                                  <span className="ml-1 opacity-70">
+                                    ({log?.current_count ?? 0}/{m.target_count})
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
-                {missions.filter((m) => m.frequency === "daily").length ===
-                  0 && (
+                    </div>
+                  );
+                })}
+                {missions.length === 0 && (
                   <p className="text-sm text-[rgb(var(--color-text-dim))]">
-                    No daily missions
+                    No missions found
                   </p>
                 )}
               </div>

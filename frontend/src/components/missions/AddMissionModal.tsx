@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, Plus, Minus } from "lucide-react";
 import type { Frequency, MissionType } from "@/types";
 
 interface AddMissionModalProps {
@@ -15,6 +15,7 @@ interface AddMissionModalProps {
     target_count: number;
   }) => void;
   defaultFrequency?: Frequency;
+  lockFrequency?: boolean;
 }
 
 export default function AddMissionModal({
@@ -22,12 +23,23 @@ export default function AddMissionModal({
   onClose,
   onSubmit,
   defaultFrequency = "daily",
+  lockFrequency = false,
 }: AddMissionModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [frequency, setFrequency] = useState<Frequency>(defaultFrequency);
   const [missionType, setMissionType] = useState<MissionType>("boolean");
   const [targetCount, setTargetCount] = useState(1);
+
+  useEffect(() => {
+    if (isOpen) {
+      setFrequency(defaultFrequency);
+      setTitle("");
+      setDescription("");
+      setMissionType("boolean");
+      setTargetCount(1);
+    }
+  }, [isOpen, defaultFrequency]);
 
   if (!isOpen) return null;
 
@@ -37,7 +49,7 @@ export default function AddMissionModal({
     onSubmit({
       title: title.trim(),
       description: description.trim(),
-      frequency,
+      frequency: lockFrequency ? defaultFrequency : frequency,
       mission_type: missionType,
       target_count: missionType === "counter" ? targetCount : 1,
     });
@@ -66,7 +78,11 @@ export default function AddMissionModal({
           <X className="w-5 h-5" />
         </button>
 
-        <h2 className="text-xl font-bold mb-6">Add New Mission</h2>
+        <h2 className="text-xl font-bold mb-6">
+          {lockFrequency
+            ? `Add ${defaultFrequency.charAt(0).toUpperCase() + defaultFrequency.slice(1)} Mission`
+            : "Add New Mission"}
+        </h2>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Title */}
@@ -98,28 +114,30 @@ export default function AddMissionModal({
             />
           </div>
 
-          {/* Frequency */}
-          <div>
-            <label className="block text-xs font-medium text-[rgb(var(--color-text-muted))] mb-1.5 uppercase tracking-wider">
-              Frequency
-            </label>
-            <div className="flex gap-2">
-              {(["daily", "weekly", "monthly"] as Frequency[]).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFrequency(f)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-all ${
-                    frequency === f
-                      ? "bg-[rgba(var(--color-primary),0.2)] text-[rgb(var(--color-primary-light))] border border-[rgba(var(--color-primary),0.4)]"
-                      : "bg-[rgba(var(--color-surface),0.6)] text-[rgb(var(--color-text-muted))] border border-[rgba(var(--color-border),0.3)] hover:border-[rgba(var(--color-border),0.6)]"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
+          {/* Frequency - only shown when not locked (e.g. Dashboard) */}
+          {!lockFrequency && (
+            <div>
+              <label className="block text-xs font-medium text-[rgb(var(--color-text-muted))] mb-1.5 uppercase tracking-wider">
+                Frequency
+              </label>
+              <div className="flex gap-2">
+                {(["daily", "weekly", "monthly"] as Frequency[]).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFrequency(f)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-all ${
+                      frequency === f
+                        ? "bg-[rgba(var(--color-primary),0.2)] text-[rgb(var(--color-primary-light))] border border-[rgba(var(--color-primary),0.4)]"
+                        : "bg-[rgba(var(--color-surface),0.6)] text-[rgb(var(--color-text-muted))] border border-[rgba(var(--color-border),0.3)] hover:border-[rgba(var(--color-border),0.6)]"
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Mission Type */}
           <div>
@@ -158,15 +176,26 @@ export default function AddMissionModal({
               <label className="block text-xs font-medium text-[rgb(var(--color-text-muted))] mb-1.5 uppercase tracking-wider">
                 Target Count
               </label>
-              <input
-                type="number"
-                value={targetCount}
-                onChange={(e) =>
-                  setTargetCount(Math.max(1, parseInt(e.target.value) || 1))
-                }
-                className="input-field w-32"
-                min={1}
-              />
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTargetCount((prev) => Math.max(1, prev - 1))}
+                  className="w-10 h-10 rounded-xl border border-[rgba(var(--color-border),0.5)] flex items-center justify-center text-[rgb(var(--color-text-muted))] hover:border-[rgb(var(--color-primary))] hover:text-[rgb(var(--color-primary))] hover:bg-[rgba(var(--color-primary),0.1)] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  disabled={targetCount <= 1}
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <div className="w-16 h-10 flex items-center justify-center bg-[rgba(var(--color-surface),0.6)] border border-[rgba(var(--color-border),0.3)] rounded-xl font-mono font-bold text-lg shadow-inner">
+                  {targetCount}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTargetCount((prev) => prev + 1)}
+                  className="w-10 h-10 rounded-xl border border-[rgba(var(--color-border),0.5)] flex items-center justify-center text-[rgb(var(--color-text-muted))] hover:border-[rgb(var(--color-primary))] hover:text-[rgb(var(--color-primary))] hover:bg-[rgba(var(--color-primary),0.1)] transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
 

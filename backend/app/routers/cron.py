@@ -65,7 +65,11 @@ async def trigger_daily_reports(
     session: AsyncSession = Depends(get_session),
 ):
     """Generate daily reports for all users (yesterday's data)."""
-    yesterday = date.today() - timedelta(days=1)
+    from zoneinfo import ZoneInfo
+    from datetime import datetime
+    ist = ZoneInfo("Asia/Jerusalem")
+    today = datetime.now(ist).date()
+    yesterday = today - timedelta(days=1)
     count = await _run_reports(
         Frequency.DAILY, yesterday, yesterday, session, background_tasks
     )
@@ -78,18 +82,25 @@ async def trigger_weekly_reports(
     session: AsyncSession = Depends(get_session),
 ):
     """Generate weekly reports for all users (last week's data)."""
-    today = date.today()
-    # Last week: Monday to Sunday
-    last_monday = today - timedelta(days=today.weekday() + 7)
-    last_sunday = last_monday + timedelta(days=6)
+    # Use IST for cron calculations
+    from zoneinfo import ZoneInfo
+    from datetime import datetime
+    ist = ZoneInfo("Asia/Jerusalem")
+    today = datetime.now(ist).date()
+    
+    # Last week: Sunday to Saturday
+    days_since_sunday = (today.weekday() + 1) % 7
+    last_sunday = today - timedelta(days=days_since_sunday + 7)
+    last_saturday = last_sunday + timedelta(days=6)
+    
     count = await _run_reports(
-        Frequency.WEEKLY, last_monday, last_sunday, session, background_tasks
+        Frequency.WEEKLY, last_sunday, last_saturday, session, background_tasks
     )
     return {
         "status": "ok",
         "reports_generated": count,
-        "period_start": str(last_monday),
-        "period_end": str(last_sunday),
+        "period_start": str(last_sunday),
+        "period_end": str(last_saturday),
     }
 
 
@@ -99,7 +110,10 @@ async def trigger_monthly_reports(
     session: AsyncSession = Depends(get_session),
 ):
     """Generate monthly reports for all users (last month's data)."""
-    today = date.today()
+    from zoneinfo import ZoneInfo
+    from datetime import datetime
+    ist = ZoneInfo("Asia/Jerusalem")
+    today = datetime.now(ist).date()
     first_of_this_month = today.replace(day=1)
     last_day_prev_month = first_of_this_month - timedelta(days=1)
     first_of_prev_month = last_day_prev_month.replace(day=1)
