@@ -129,7 +129,6 @@ async def toggle_mission(
 
     session.add(log)
     await session.commit()
-    await session.refresh(log)
     return log
 
 
@@ -163,7 +162,6 @@ async def increment_mission(
 
     session.add(log)
     await session.commit()
-    await session.refresh(log)
     return log
 
 

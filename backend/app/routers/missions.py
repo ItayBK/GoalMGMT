@@ -62,7 +62,6 @@ async def create_mission(
     )
     session.add(mission)
     await session.commit()
-    await session.refresh(mission)
     return mission
 
 
@@ -87,7 +86,6 @@ async def update_mission(
 
     session.add(mission)
     await session.commit()
-    await session.refresh(mission)
     return mission
 
 

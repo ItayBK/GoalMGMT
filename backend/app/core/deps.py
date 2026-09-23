@@ -22,8 +22,10 @@ async def get_current_user(
     session: AsyncSession = Depends(get_session),
 ) -> User:
     """
-    Decode the JWT from the Authorization header and return the User row.
-    Raises 401 if the token is invalid or the user doesn't exist.
+    Decode the JWT from the Authorization header and return a User object.
+    The JWT payload already contains user_id (and optionally email), so we
+    avoid a DB round-trip on every request. The signature validates authenticity.
+    Raises 401 if the token is invalid.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -31,18 +33,21 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    user_id = decode_access_token(token)
-    if user_id is None:
+    payload = decode_access_token(token, full_payload=True)
+    if payload is None:
+        raise credentials_exception
+
+    user_id_str = payload.get("sub")
+    if not user_id_str:
         raise credentials_exception
 
     try:
-        uid = uuid.UUID(user_id)
+        uid = uuid.UUID(user_id_str)
     except ValueError:
         raise credentials_exception
 
     result = await session.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
-
     if user is None:
         raise credentials_exception
 

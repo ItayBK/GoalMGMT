@@ -14,7 +14,11 @@ from sqlmodel import SQLModel
 
 from app.core.config import settings
 
-# Create the async engine configured for Supabase Transaction Pooler (PgBouncer).
+# NullPool is required for Supabase's PgBouncer in transaction mode (port 6543).
+# PgBouncer manages its own server-side connection pool.
+# statement_cache_size=0 disables asyncpg's LRU statement cache.
+# prepared_statement_name_func ensures each statement gets a unique ID so
+# PgBouncer doesn't collide with previously prepared statements on the backend connection.
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,

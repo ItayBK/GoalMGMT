@@ -40,7 +40,7 @@ async def register(
     await session.commit()
     await session.refresh(user)
 
-    token = create_access_token(subject=str(user.id))
+    token = create_access_token(subject=str(user.id), email=user.email)
     return TokenResponse(access_token=token)
 
 
@@ -59,5 +59,5 @@ async def login(
             detail="Invalid email or password",
         )
 
-    token = create_access_token(subject=str(user.id))
+    token = create_access_token(subject=str(user.id), email=user.email)
     return TokenResponse(access_token=token)

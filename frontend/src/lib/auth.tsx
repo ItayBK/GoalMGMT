@@ -20,12 +20,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // On mount, check for existing token and fetch user profile
+  // On mount, restore cached user instantly then revalidate in background
   useEffect(() => {
     const stored = localStorage.getItem("token");
+    const cachedUser = sessionStorage.getItem("user");
+
+    if (cachedUser) {
+      try {
+        setUser(JSON.parse(cachedUser));
+        setLoading(false); // show UI immediately — no spinner
+      } catch {
+        sessionStorage.removeItem("user");
+      }
+    }
+
     if (stored) {
       setToken(stored);
-      fetchUser(stored);
+      fetchUser(stored); // revalidates in background
     } else {
       setLoading(false);
     }
@@ -37,8 +48,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { Authorization: `Bearer ${jwt}` },
       });
       setUser(res.data);
+      sessionStorage.setItem("user", JSON.stringify(res.data));
     } catch {
       localStorage.removeItem("token");
+      sessionStorage.removeItem("user");
       setToken(null);
     } finally {
       setLoading(false);
@@ -69,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   function logout() {
     localStorage.removeItem("token");
+    sessionStorage.removeItem("user");
     setToken(null);
     setUser(null);
     window.location.href = "/login";

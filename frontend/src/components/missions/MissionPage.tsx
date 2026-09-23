@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
+import { pageCache } from "@/lib/cache";
 import type { Frequency, Mission, MissionLog } from "@/types";
 import MissionCard from "@/components/missions/MissionCard";
 import AddMissionModal from "@/components/missions/AddMissionModal";
@@ -12,6 +13,11 @@ interface MissionPageProps {
   frequency: Frequency;
   title: string;
   subtitle: string;
+}
+
+interface PageData {
+  missions: Mission[];
+  logs: MissionLog[];
 }
 
 function getPeriodBounds(frequency: Frequency): {
@@ -47,10 +53,15 @@ export default function MissionPage({
   title,
   subtitle,
 }: MissionPageProps) {
-  const [missions, setMissions] = useState<Mission[]>([]);
-  const [logs, setLogs] = useState<MissionLog[]>([]);
+  const cacheKey = `missions-page-${frequency}`;
+
+  // Seed state from cache so the page renders immediately on revisit
+  const cached = pageCache.get<PageData>(cacheKey);
+  const [missions, setMissions] = useState<Mission[]>(cached?.missions ?? []);
+  const [logs, setLogs] = useState<MissionLog[]>(cached?.logs ?? []);
   const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(true);
+  // Skip the loading spinner if we already have cached data
+  const [loading, setLoading] = useState(!cached);
 
   const fetchData = useCallback(async () => {
     try {
@@ -59,16 +70,22 @@ export default function MissionPage({
         api.get<Mission[]>(`/missions/?frequency=${frequency}`),
         api.get<MissionLog[]>(`/logs/?start=${start}&end=${end}`),
       ]);
-      setMissions(missionsRes.data);
-      setLogs(logsRes.data);
+      const fresh: PageData = {
+        missions: missionsRes.data,
+        logs: logsRes.data,
+      };
+      pageCache.set(cacheKey, fresh);
+      setMissions(fresh.missions);
+      setLogs(fresh.logs);
     } catch {
       toast.error("Failed to load missions");
     } finally {
       setLoading(false);
     }
-  }, [frequency]);
+  }, [frequency, cacheKey]);
 
   useEffect(() => {
+    // Always revalidate in the background — even if we showed cached data
     fetchData();
   }, [fetchData]);
 
@@ -86,8 +103,9 @@ export default function MissionPage({
     try {
       const res = await api.post<MissionLog>(`/logs/${missionId}/toggle`);
       setLogs((prev) => {
-        const filtered = prev.filter((l) => l.mission_id !== missionId);
-        return [...filtered, res.data];
+        const next = [...prev.filter((l) => l.mission_id !== missionId), res.data];
+        pageCache.set(cacheKey, { missions, logs: next });
+        return next;
       });
     } catch {
       toast.error("Failed to update");
@@ -100,8 +118,9 @@ export default function MissionPage({
         increment,
       });
       setLogs((prev) => {
-        const filtered = prev.filter((l) => l.mission_id !== missionId);
-        return [...filtered, res.data];
+        const next = [...prev.filter((l) => l.mission_id !== missionId), res.data];
+        pageCache.set(cacheKey, { missions, logs: next });
+        return next;
       });
     } catch {
       toast.error("Failed to update");
@@ -117,7 +136,11 @@ export default function MissionPage({
   }) {
     try {
       const res = await api.post<Mission>("/missions/", data);
-      setMissions((prev) => [res.data, ...prev]);
+      setMissions((prev) => {
+        const next = [res.data, ...prev];
+        pageCache.set(cacheKey, { missions: next, logs });
+        return next;
+      });
       toast.success("Mission created!");
     } catch {
       toast.error("Failed to create mission");
@@ -127,7 +150,11 @@ export default function MissionPage({
   async function handleDeleteMission(missionId: string) {
     try {
       await api.delete(`/missions/${missionId}`);
-      setMissions((prev) => prev.filter((m) => m.id !== missionId));
+      setMissions((prev) => {
+        const next = prev.filter((m) => m.id !== missionId);
+        pageCache.set(cacheKey, { missions: next, logs });
+        return next;
+      });
       toast.success("Mission removed");
     } catch {
       toast.error("Failed to delete mission");
